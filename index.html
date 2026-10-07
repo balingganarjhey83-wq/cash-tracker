@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cash Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef2f1;--card:#fff;--ink:#14302b;--mute:#5d726d;--line:#d5dedc;--in:#0f7a5c;--out:#c2412d;--btn:#14302b;--btnink:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1b18;--card:#162622;--ink:#e6f0ed;--mute:#8fa6a0;--line:#264039;--in:#4cc9a0;--out:#ff8a73;--btn:#e6f0ed;--btnink:#0e1b18}}
+:root[data-theme="dark"]{--bg:#0e1b18;--card:#162622;--ink:#e6f0ed;--mute:#8fa6a0;--line:#264039;--in:#4cc9a0;--out:#ff8a73;--btn:#e6f0ed;--btnink:#0e1b18}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Bricolage Grotesque',system-ui,sans-serif;line-height:1.45}
+main{max-width:640px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:1.4rem;margin:0 0 14px;font-weight:800}
+.bal{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+.bal small{color:var(--mute)}
+.bal strong{display:block;font-size:2.4rem;font-weight:800;letter-spacing:-.02em}
+.split{display:flex;gap:24px;margin-top:8px;font-size:.95rem}
+.in{color:var(--in)}.out{color:var(--out)}
+form{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:16px 0;display:grid;gap:12px}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg label{border:1.5px solid var(--line);border-radius:10px;padding:10px;text-align:center;cursor:pointer;font-weight:600}
+.seg input{position:absolute;opacity:0}
+.seg label:has(input[value=in]:checked){border-color:var(--in);color:var(--in)}
+.seg label:has(input[value=out]:checked){border-color:var(--out);color:var(--out)}
+.seg label:has(input:focus-visible){outline:2px solid var(--ink);outline-offset:2px}
+.f{display:grid;gap:4px;font-size:.9rem;color:var(--mute)}
+input[type=date],input[type=number],input[type=text]{font:inherit;color:var(--ink);background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:10px;width:100%}
+input:focus-visible,button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:420px){.row2{grid-template-columns:1fr}}
+.go{font:inherit;font-weight:600;background:var(--btn);color:var(--btnink);border:0;border-radius:10px;padding:12px;cursor:pointer}
+.err{color:var(--out);font-size:.9rem;min-height:1.2em}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+li b{font-size:1.05rem;white-space:nowrap}
+li .d{color:var(--mute);font-size:.85rem}
+.del{font:inherit;background:none;border:0;color:var(--mute);cursor:pointer;padding:4px 8px;margin-left:4px}
+.empty{color:var(--mute);padding:16px 0}
+.hd{display:flex;justify-content:space-between;align-items:center}
+.lnk{font:inherit;background:none;border:0;color:var(--mute);cursor:pointer;text-decoration:underline}
+</style>
+</head>
+<body>
+<main>
+<h1>Cash tracker</h1>
+<section class="bal" aria-live="polite">
+<small>Cash on hand</small>
+<strong id="bal">₱0.00</strong>
+<div class="split"><span class="in" id="tin">In ₱0.00</span><span class="out" id="tout">Out ₱0.00</span></div>
+</section>
+
+<form id="f" novalidate>
+<div class="seg" role="radiogroup" aria-label="Type">
+<label><input type="radio" name="t" value="in" checked>Cash in</label>
+<label><input type="radio" name="t" value="out">Cash out</label>
+</div>
+<div class="row2">
+<label class="f">Date<input type="date" id="date" required></label>
+<label class="f">Amount (₱)<input type="number" id="amt" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required></label>
+</div>
+<label class="f"><span id="nlabel">Note (who gave it)</span><input type="text" id="note" maxlength="80"></label>
+<div class="err" id="err" role="alert"></div>
+<button class="go" type="submit">Add entry</button>
+</form>
+
+<div class="hd"><strong>Entries</strong><button class="lnk" id="clr" type="button">Clear all</button></div>
+<ul id="list"></ul>
+</main>
+
+<script>
+(function(){
+var KEY='cash-tracker-entries',items=[];
+try{items=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){items=[]}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(items))}catch(e){}}
+var $=function(id){return document.getElementById(id)};
+var fmt=function(n){return '₱'+n.toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2})};
+
+function today(){var d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
+$('date').value=today();
+
+function type(){return document.querySelector('input[name=t]:checked').value}
+function labels(){
+  var o=type()==='out';
+  $('nlabel').textContent=o?'What was it used for?':'Note (who gave it)';
+  $('note').placeholder=o?'e.g. Groceries':'e.g. Allowance';
+}
+document.querySelectorAll('input[name=t]').forEach(function(r){r.addEventListener('change',labels)});
+labels();
+
+function render(){
+  var tin=0,tout=0;
+  items.forEach(function(e){e.type==='in'?tin+=e.amount:tout+=e.amount});
+  $('bal').textContent=fmt(tin-tout);
+  $('tin').textContent='In '+fmt(tin);
+  $('tout').textContent='Out '+fmt(tout);
+
+  var l=$('list');l.innerHTML='';
+  if(!items.length){l.innerHTML='<li class="empty">No entries yet. Add your first cash in above.</li>';return}
+
+  items.slice().sort(function(a,b){return b.date.localeCompare(a.date)||b.id-a.id}).forEach(function(e){
+    var li=document.createElement('li'),L=document.createElement('div'),R=document.createElement('div'),
+        b=document.createElement('b'),x=document.createElement('button');
+    L.innerHTML='<div></div><div class="d"></div>';
+    L.firstChild.textContent=e.note||(e.type==='in'?'Cash in':'Cash out');
+    L.lastChild.textContent=new Date(e.date+'T00:00').toLocaleDateString('en-PH',{year:'numeric',month:'short',day:'numeric'});
+    b.className=e.type;
+    b.textContent=(e.type==='in'?'+':'−')+fmt(e.amount);
+    x.className='del';x.textContent='✕';x.setAttribute('aria-label','Delete entry');
+    x.onclick=function(){items=items.filter(function(i){return i.id!==e.id});save();render()};
+    R.style.display='flex';R.style.alignItems='center';
+    R.appendChild(b);R.appendChild(x);
+    li.appendChild(L);li.appendChild(R);l.appendChild(li);
+  });
+}
+
+$('f').addEventListener('submit',function(ev){
+  ev.preventDefault();
+  var a=parseFloat($('amt').value),d=$('date').value,t=type(),n=$('note').value.trim(),er=$('err');
+  if(!d){er.textContent='Pick a date.';return}
+  if(!(a>0)){er.textContent='Enter an amount greater than 0.';return}
+  if(t==='out'&&!n){er.textContent='Say what the cash out was used for.';return}
+  er.textContent='';
+  items.push({id:Date.now(),type:t,date:d,amount:a,note:n});
+  save();render();
+  $('amt').value='';$('note').value='';$('amt').focus();
+});
+
+$('clr').addEventListener('click',function(){
+  if(items.length&&confirm('Delete all entries?')){items=[];save();render()}
+});
+
+render();
+})();
+</script>
+</body>
+</html>
